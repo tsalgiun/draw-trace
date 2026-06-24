@@ -1,12 +1,22 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, forwardRef, useImperativeHandle } from "react";
+
+export interface ImageOverlayHandle {
+  getImageState: () => {
+    img: HTMLImageElement | null;
+    opacity: number;
+    position: { x: number; y: number };
+    scale: number;
+    naturalSize: { w: number; h: number };
+  };
+}
 
 interface ImageOverlayProps {
   imageUrl: string | null;
 }
 
-export default function ImageOverlay({ imageUrl }: ImageOverlayProps) {
+const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function ImageOverlay({ imageUrl }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const [opacity, setOpacity] = useState(50);
@@ -16,6 +26,16 @@ export default function ImageOverlay({ imageUrl }: ImageOverlayProps) {
   const dragStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const lastDist = useRef(0);
   const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
+
+  useImperativeHandle(ref, () => ({
+    getImageState: () => ({
+      img: imgRef.current,
+      opacity,
+      position,
+      scale,
+      naturalSize,
+    }),
+  }));
 
   const fitScale = useCallback((w: number, h: number) => {
     if (!containerRef.current) return 1;
@@ -126,4 +146,6 @@ export default function ImageOverlay({ imageUrl }: ImageOverlayProps) {
       </div>
     </div>
   );
-}
+});
+
+export default ImageOverlay;

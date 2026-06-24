@@ -1,18 +1,28 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from "react";
+
+export interface CameraFeedHandle {
+  getVideoElement: () => HTMLVideoElement | null;
+  getSnapshotCanvas: () => HTMLCanvasElement | null;
+}
 
 interface CameraFeedProps {
   onFrameCapture?: (canvas: HTMLCanvasElement) => void;
 }
 
-export default function CameraFeed({ onFrameCapture }: CameraFeedProps) {
+const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(function CameraFeed({ onFrameCapture }, ref) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState("");
+
+  useImperativeHandle(ref, () => ({
+    getVideoElement: () => videoRef.current,
+    getSnapshotCanvas: () => canvasRef.current,
+  }));
 
   const startCamera = useCallback(async (f: "environment" | "user") => {
     if (stream) stream.getTracks().forEach((t) => t.stop());
@@ -90,4 +100,6 @@ export default function CameraFeed({ onFrameCapture }: CameraFeedProps) {
       </button>
     </>
   );
-}
+});
+
+export default CameraFeed;
