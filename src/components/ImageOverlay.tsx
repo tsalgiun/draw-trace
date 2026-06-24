@@ -112,15 +112,15 @@ export default function ImageOverlay({ imageUrl }: ImageOverlayProps) {
           onPointerUp={onPointerUp}
         />
       </div>
-      <div className="absolute bottom-4 left-4 right-20 z-20 flex items-center gap-3 bg-black/50 rounded-full px-4 py-2">
-        <span className="text-white text-xs font-medium w-6 text-right">{opacity}%</span>
+      <div className="absolute top-14 left-4 right-4 z-30 flex items-center gap-3 bg-black/50 backdrop-blur-sm rounded-full px-4 py-2.5">
+        <span className="text-white text-xs font-medium w-8 text-right">{opacity}%</span>
         <input
           type="range"
           min={5}
           max={100}
           value={opacity}
           onChange={(e) => setOpacity(Number(e.target.value))}
-          className="flex-1 h-1 accent-white cursor-pointer"
+          className="flex-1 h-1.5 accent-white cursor-pointer"
           aria-label="Opacity"
         />
       </div>
