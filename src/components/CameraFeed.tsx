@@ -16,6 +16,7 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(function Camera
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facing, setFacing] = useState<"environment" | "user">("environment");
+  const [torchOn, setTorchOn] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,6 +28,7 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(function Camera
   const startCamera = useCallback(async (f: "environment" | "user") => {
     if (stream) stream.getTracks().forEach((t) => t.stop());
     setFrozen(false);
+    setTorchOn(false);
     setError("");
     try {
       const s = await navigator.mediaDevices.getUserMedia({
@@ -48,6 +50,20 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(function Camera
     const next = facing === "environment" ? "user" : "environment";
     setFacing(next);
     startCamera(next);
+  };
+
+  const toggleTorch = async () => {
+    if (!stream) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track) return;
+    try {
+      await track.applyConstraints({
+        advanced: [{ torch: !torchOn }] as any,
+      });
+      setTorchOn(!torchOn);
+    } catch {
+      // torch not supported
+    }
   };
 
   const freeze = () => {
@@ -98,6 +114,19 @@ const CameraFeed = forwardRef<CameraFeedHandle, CameraFeedProps>(function Camera
           <path d="M15 9h4l-2-2m0 0a7 7 0 00-12 4m12-4v4M9 15H5l2 2m0 0a7 7 0 0012-4m-12 4v-4" stroke="white" strokeWidth="2" fill="none" />
         </svg>
       </button>
+      {facing === "environment" && (
+        <button
+          onClick={toggleTorch}
+          className="absolute bottom-24 right-[4.5rem] z-30 w-10 h-10 rounded-full flex items-center justify-center"
+          aria-label={torchOn ? "Turn off flashlight" : "Turn on flashlight"}
+        >
+          <svg viewBox="0 0 24 24" fill="none" className="w-6 h-6">
+            <path d="M9 18l-3-3 3-3M15 6l3 3-3 3" stroke={torchOn ? "#FFD700" : "rgba(255,255,255,0.7)"} strokeWidth="2" strokeLinecap="round" />
+            <path d="M12 2v4M12 18v4M4 12H2M22 12h-2" stroke={torchOn ? "#FFD700" : "rgba(255,255,255,0.5)"} strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="12" cy="12" r="3" fill={torchOn ? "#FFD700" : "rgba(255,255,255,0.2)"} />
+          </svg>
+        </button>
+      )}
     </>
   );
 });
