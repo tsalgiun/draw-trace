@@ -10,6 +10,7 @@ export interface ImageOverlayHandle {
     scale: number;
     rotation: number;
     naturalSize: { w: number; h: number };
+    outlined: boolean;
   };
   reset: () => void;
   rotate: () => void;
@@ -17,6 +18,58 @@ export interface ImageOverlayHandle {
 
 interface ImageOverlayProps {
   imageUrl: string | null;
+}
+
+function toOutline(src: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+
+      const data = ctx.getImageData(0, 0, w, h);
+      const gray = new Float32Array(w * h);
+      for (let i = 0; i < w * h; i++) {
+        const p = i * 4;
+        gray[i] = data.data[p] * 0.299 + data.data[p + 1] * 0.587 + data.data[p + 2] * 0.114;
+      }
+
+      const out = ctx.createImageData(w, h);
+      const threshold = 30;
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const idx = y * w + x;
+          const gx =
+            -gray[idx - w - 1] + gray[idx - w + 1] -
+            2 * gray[idx - 1] + 2 * gray[idx + 1] -
+            gray[idx + w - 1] + gray[idx + w + 1];
+          const gy =
+            -gray[idx - w - 1] - 2 * gray[idx - w] - gray[idx - w + 1] +
+            gray[idx + w - 1] + 2 * gray[idx + w] + gray[idx + w + 1];
+          const mag = Math.sqrt(gx * gx + gy * gy);
+          const p = idx * 4;
+          if (mag > threshold) {
+            const v = Math.min(255, mag);
+            out.data[p] = v;
+            out.data[p + 1] = v;
+            out.data[p + 2] = v;
+            out.data[p + 3] = 255;
+          } else {
+            out.data[p + 3] = 0;
+          }
+        }
+      }
+      ctx.putImageData(out, 0, 0);
+      resolve(c.toDataURL());
+    };
+    img.src = src;
+  });
 }
 
 const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function ImageOverlay({ imageUrl }, ref) {
@@ -27,6 +80,8 @@ const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function 
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [outlined, setOutlined] = useState(false);
+  const [outlinedUrl, setOutlinedUrl] = useState<string | null>(null);
   const dragStart = useRef({ x: 0, y: 0, px: 0, py: 0 });
   const lastDist = useRef(0);
   const [naturalSize, setNaturalSize] = useState({ w: 0, h: 0 });
@@ -40,6 +95,7 @@ const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function 
       scale,
       rotation,
       naturalSize,
+      outlined,
     }),
     reset: () => {
       setPosition({ x: 0, y: 0 });
@@ -62,6 +118,7 @@ const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function 
   useEffect(() => {
     if (!imageUrl) return;
     const img = new window.Image();
+    img.crossOrigin = "anonymous";
     img.onload = () => {
       const s = fitScale(img.naturalWidth, img.naturalHeight);
       fittedScale.current = s;
@@ -69,9 +126,24 @@ const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function 
       setScale(s);
       setPosition({ x: 0, y: 0 });
       setRotation(0);
+      setOutlined(false);
+      setOutlinedUrl(null);
     };
     img.src = imageUrl;
   }, [imageUrl, fitScale]);
+
+  const toggleOutline = useCallback(async () => {
+    if (!imageUrl) return;
+    if (outlined) {
+      setOutlined(false);
+      return;
+    }
+    const url = outlinedUrl || await toOutline(imageUrl);
+    setOutlinedUrl(url);
+    setOutlined(true);
+  }, [imageUrl, outlined, outlinedUrl]);
+
+  const displayUrl = outlined && outlinedUrl ? outlinedUrl : (imageUrl || "");
 
   const onPointerDown = (e: React.PointerEvent) => {
     setDragging(true);
@@ -129,7 +201,7 @@ const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function 
       <div className="absolute inset-0 flex items-center justify-center">
         <img
           ref={imgRef}
-          src={imageUrl}
+          src={displayUrl}
           alt="Reference"
           draggable={false}
           style={{
@@ -142,6 +214,7 @@ const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function 
             cursor: dragging ? "grabbing" : "grab",
             touchAction: "none",
             willChange: "transform, opacity",
+            filter: outlined ? "invert(1)" : "none",
           }}
           className="select-none"
           onPointerDown={onPointerDown}
@@ -160,6 +233,16 @@ const ImageOverlay = forwardRef<ImageOverlayHandle, ImageOverlayProps>(function 
           className="flex-1 h-1.5 accent-white cursor-pointer min-w-0"
           aria-label="Opacity"
         />
+        <button
+          onClick={toggleOutline}
+          className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${outlined ? "bg-white/30 ring-1 ring-white/60" : "bg-white/15"}`}
+          aria-label={outlined ? "Show original" : "Show outlines only"}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" className="w-4 h-4">
+            <path d="M4 20h16M4 4h16" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
         <button
           onClick={() => setRotation((r) => (r + 90) % 360)}
           className="shrink-0 w-8 h-8 rounded-full bg-white/15 flex items-center justify-center"
